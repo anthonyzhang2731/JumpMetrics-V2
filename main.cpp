@@ -41,10 +41,10 @@ bool buttonArmed = true;
 
 /* ---------------- Helpers ---------------- */
 float readDistance() {
-  VL53L0X_RangingMeasurementData_t m;
-  lox.rangingTest(&m, false);
-  if (m.RangeStatus == 4) return -1;
-  return m.RangeMilliMeter;
+  if (!lox.isRangeComplete()) return -2; // no new reading yet
+  uint16_t d = lox.readRangeResult();
+  if (d >= 8190) return -1; // out of range sentinel
+  return (float)d;
 }
 
 bool footInZone(float d) {
@@ -52,7 +52,7 @@ bool footInZone(float d) {
 }
 
 bool footGone(float d) {
-  return (d < 0 || d > READY_ZONE_MM + 150);
+  return (d == -1 || d > READY_ZONE_MM + 150);
 }
 
 void show(const char* line1, const char* line2 = "") {
@@ -106,6 +106,9 @@ void setup() {
     while (1);
   }
 
+  // Start continuous ranging at 20ms period (~50Hz)
+  lox.startRangeContinuous(20);
+
   show("Press to begin", "");
 
   IrReceiver.begin(IR_PIN, DISABLE_LED_FEEDBACK);
@@ -122,6 +125,10 @@ void loop() {
   }
 
   float d = readDistance();
+
+  // If no new reading is ready yet, skip processing this iteration
+  if (d == -2) return;
+
   static int stableCount = 0;
 
   switch (state) {
@@ -191,6 +198,4 @@ void loop() {
     case IDLE:
       break;
   }
-
-  delay(20);
 }
